@@ -1,3 +1,4 @@
+# GMAIL_READER, WHERE THE GMAIL API MAGIC HAPPENS
 import os.path
 import base64
 import json
@@ -5,6 +6,8 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+
+from classifier import classify_email
 
 SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 
@@ -22,6 +25,9 @@ def authenticate_gmail():
             token.write(creds.to_json())
     return build('gmail', 'v1', credentials=creds)
 
+
+
+
 def get_emails(service, max_results=5):
     results = service.users().messages().list(userId='me', maxResults=max_results).execute()
     messages = results.get('messages', [])
@@ -31,7 +37,31 @@ def get_emails(service, max_results=5):
         headers = payload.get("headers", [])
         subject = next((h["value"] for h in headers if h["name"] == "Subject"), "(No Subject)")
         snippet = txt.get("snippet", "")
-        print(f"Subject: {subject}\nSnippet: {snippet}\n{'-'*50}")
+        label = classify_email(subject, snippet)
+        print(f"Labeling as: {label}")
+        apply_label(service, msg['id'], label)
+
+def apply_label(service, msg_id, label_name):
+    labels_res = service.users().labels().list(userId='me').execute()
+    label_id = None
+    for label in labels_res['labels']:
+        if label['name'].lower() == label_name.lower():
+            label_id = label['id']
+            break
+    if not label_id:
+        new_label = service.users().labels().create(userId='me', body={
+            'name': label_name,
+            'labelListVisibility': 'labelShow',
+            'messageListVisibility': 'show'
+        }).execute()
+        label_id = new_label['id']
+    
+    service.users().messages().modify(
+        userId='me',
+        id=msg_id,
+        body={'addLabelIds': [label_id]}
+    ).execute()
+
 
 if __name__ == '__main__':
     service = authenticate_gmail()

@@ -28,7 +28,7 @@ def authenticate_gmail():
 
 
 
-def get_emails(service, max_results=5):
+def get_emails(service, max_results=100):
     results = service.users().messages().list(userId='me', maxResults=max_results).execute()
     messages = results.get('messages', [])
     for msg in messages:
@@ -39,6 +39,9 @@ def get_emails(service, max_results=5):
         snippet = txt.get("snippet", "")
         label = classify_email(subject, snippet)
         print(f"Labeling as: {label}")
+
+        print(f"Subject: {subject}\nSnippet: {snippet}\nPredicted Label: {label}\n---")
+
         apply_label(service, msg['id'], label)
 
 def apply_label(service, msg_id, label_name):

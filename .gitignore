@@ -5,3 +5,4 @@ venv/
 credentials.json
 token.json
 .vscode/
+email_classifier.log

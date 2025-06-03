@@ -11,12 +11,23 @@ load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def classify_email(subject, snippet):
-    prompt = f"""Classify the following email into one of the categories: Work, Personal, Promotion, Spam, Newsletter, Receipt, Other.
+    prompt = f"""Classify the following email into one of the categories: 
+                                                                            Work, 
+                                                                            Personal, 
+                                                                            Promotion, 
+                                                                            Spam, 
+                                                                            Newsletter, 
+                                                                            Receipt, 
+                                                                            Sportsbook, 
+                                                                            Professional 
+                                                                            Development, 
+                                                                            Subscriptions, 
+                                                                            Other.
 
-Subject: {subject}
-Body: {snippet}
+                Subject: {subject}
+                Body: {snippet}
 
-Respond only with the category name."""
+                Respond only with the category name."""
     
     response = client.chat.completions.create(
         model="gpt-4o",

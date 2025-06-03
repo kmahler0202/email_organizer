@@ -2,12 +2,24 @@
 import os.path
 import base64
 import json
+import html
+import logging
+from datetime import datetime
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
 from classifier import classify_email
+
+# Configure logging
+logging.basicConfig(
+    filename='email_classifier.log',
+    level=logging.INFO,
+    format='%(asctime)s — %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
 
 SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 
@@ -37,10 +49,22 @@ def get_emails(service, max_results=100):
         headers = payload.get("headers", [])
         subject = next((h["value"] for h in headers if h["name"] == "Subject"), "(No Subject)")
         snippet = txt.get("snippet", "")
-        label = classify_email(subject, snippet)
-        print(f"Labeling as: {label}")
+        # Small bugfix here to decode HTML characters into human readable.
+        clean_subject = html.unescape(subject)
+        clean_snippet = html.unescape(snippet)
+        label = classify_email(clean_subject, clean_snippet)
+        # End bugfix
 
-        print(f"Subject: {subject}\nSnippet: {snippet}\nPredicted Label: {label}\n---")
+        # PRINT STATEMENT FOR DEBUGGING, ALSO LOOK IN .log FILE FOR CLEARER OUTPUT
+        log_msg = f"""
+        Subject: {clean_subject}
+        Snippet: {clean_snippet}
+        Predicted Label: {label}
+        ---
+        """
+        print(log_msg)
+        logging.info(log_msg.strip())
+        # END PRINT STATEMENTS AND DEBUG LOGGING
 
         apply_label(service, msg['id'], label)
 

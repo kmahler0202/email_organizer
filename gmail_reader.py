@@ -16,6 +16,7 @@ from classifier import classify_email
 # Configure logging
 logging.basicConfig(
     filename='email_classifier.log',
+    filemode='w',
     level=logging.INFO,
     format='%(asctime)s — %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
@@ -41,7 +42,7 @@ def authenticate_gmail():
 
 
 
-def get_emails(service, max_results=1000):
+def get_emails(service, max_results=10):
     FREQUENT_SENDERS = {
         "info@cdga.org": "CDGA",
         "no-reply@linkedin.com": "LinkedIn",
@@ -70,6 +71,11 @@ def get_emails(service, max_results=1000):
 
             # Extract clean email from "Name <email>"
             import re
+
+            # Remove invisible unicode from the snippet
+            clean_snippet = re.sub(r'[^\x20-\x7E\n\r\t]', '', clean_snippet)
+            clean_subject = re.sub(r'[^\x20-\x7E\n\r\t]', '', clean_subject)
+
             match = re.search(r'<(.+?)>', sender)
             sender_email = match.group(1) if match else sender
 

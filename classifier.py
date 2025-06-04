@@ -29,7 +29,7 @@ def classify_email(subject, snippet):
         - Social: Notifications from social media (e.g., likes, follows, comments).
         - Updates: Informational emails from apps or services (e.g., 'Your password was changed').
         - Forums: Messages from discussion boards or online communities.
-        - Other: Anything that doesn’t fit the categories above."""
+        - Other: Anything that doesn't fit the categories above."""
 
     # Actual email content to classify
     user_prompt = f"Subject: {subject}\nBody: {snippet}\n\nRespond only with the category name."

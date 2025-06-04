@@ -42,11 +42,13 @@ def authenticate_gmail():
 
 
 
-def get_emails(service, max_results=10):
+def get_emails(service, max_results=300):
     FREQUENT_SENDERS = {
         "info@cdga.org": "CDGA",
         "no-reply@linkedin.com": "LinkedIn",
-        "news@nytimes.com": "New York Times"
+        "news@nytimes.com": "New York Times",
+        "nytdirect@nytimes.com": "New York Times",
+        "jobalerts-noreply@linkedin.com" : "LinkedIn"
     }
 
     results = service.users().messages().list(userId='me', maxResults=max_results).execute()
@@ -82,6 +84,7 @@ def get_emails(service, max_results=10):
             if sender_email in FREQUENT_SENDERS:
                 label = FREQUENT_SENDERS[sender_email]
                 logging.info(f"Skipping classification. Sender: {sender_email} matched frequent sender rule.")
+                create_smart_filter(service, sender_email, label)
             else:
                 label = classify_email(clean_subject, clean_snippet)
                 time.sleep(.5)
@@ -165,11 +168,4 @@ def create_smart_filter(service, sender_email, label_name):
 
 if __name__ == '__main__':
     service = authenticate_gmail()
-    FREQUENT_SENDERS = {
-        "info@cdga.org": "CDGA",
-        "no-reply@linkedin.com": "LinkedIn",
-        "news@nytimes.com": "New York Times"
-    }
-    for sender_email, label_name in FREQUENT_SENDERS.items():
-        create_smart_filter(service, sender_email, label_name)
     get_emails(service)

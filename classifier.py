@@ -1,36 +1,45 @@
-# Here starts the EMAIL ORGANIZER project
-# THIS IS THE VERSION 1 CODE. 
-# THIS IS THE AI CLASSIFIER V2
-# USES THE NEW OPENAI API INTERFACE
+# EMAIL ORGANIZER - CLASSIFIER V3
+# GPT-4o powered email label classifier using structured categories and system instructions.
 
-from openai import OpenAI
 import os
+from openai import OpenAI
 from dotenv import load_dotenv
+
+# Limit email body length to reduce token usage
+MAX_SNIPPET_LEN = 500
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def classify_email(subject, snippet):
-    prompt = f"""Classify the following email into one of the categories: 
-                                                                            Work, 
-                                                                            Personal, 
-                                                                            Promotion, 
-                                                                            Spam, 
-                                                                            Newsletter, 
-                                                                            Receipt, 
-                                                                            Sportsbook, 
-                                                                            Professional 
-                                                                            Development, 
-                                                                            Subscriptions, 
-                                                                            Other.
+    # Truncate long snippets for token efficiency
+    snippet = snippet[:MAX_SNIPPET_LEN]
 
-                Subject: {subject}
-                Body: {snippet}
+    # System prompt with label definitions
+    prompt_system = """You are an AI email assistant. Your job is to classify emails into exactly one of the following categories:
 
-                Respond only with the category name."""
-    
+        - Work: Related to your job, coworkers, meetings, projects, or career.
+        - Personal: Friends, family, or one-on-one communication that is not work-related.
+        - Promotions: Sales, discounts, offers, deals, or marketing campaigns.
+        - Spam: Unwanted or irrelevant messages, scams, or low-quality bulk email.
+        - Newsletter: Regular subscriptions from blogs, authors, or organizations.
+        - Receipt: Order confirmations, payment receipts, shipping details.
+        - Sportsbook: Gambling, betting, or fantasy sports content.
+        - Subscriptions: Account updates, sign-up confirmations, or content access emails.
+        - Social: Notifications from social media (e.g., likes, follows, comments).
+        - Updates: Informational emails from apps or services (e.g., 'Your password was changed').
+        - Forums: Messages from discussion boards or online communities.
+        - Other: Anything that doesn’t fit the categories above."""
+
+    # Actual email content to classify
+    user_prompt = f"Subject: {subject}\nBody: {snippet}\n\nRespond only with the category name."
+
     response = client.chat.completions.create(
         model="gpt-4o",
-        messages=[{"role": "user", "content": prompt}]
+        messages=[
+            {"role": "system", "content": prompt_system},
+            {"role": "user", "content": user_prompt}
+        ]
     )
+
     return response.choices[0].message.content.strip()

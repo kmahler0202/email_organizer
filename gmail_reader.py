@@ -4,6 +4,7 @@ import base64
 import json
 import html
 import logging
+import time
 from datetime import datetime
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -40,49 +41,86 @@ def authenticate_gmail():
 
 
 
-def get_emails(service, max_results=100):
+def get_emails(service, max_results=1000):
+    FREQUENT_SENDERS = {
+        "info@cdga.org": "CDGA",
+        "no-reply@linkedin.com": "LinkedIn",
+        "news@nytimes.com": "New York Times"
+    }
+
     results = service.users().messages().list(userId='me', maxResults=max_results).execute()
     messages = results.get('messages', [])
+    seen_ids = set()
+
     for msg in messages:
-        txt = service.users().messages().get(userId='me', id=msg['id'], format='full').execute()
-        payload = txt['payload']
-        headers = payload.get("headers", [])
-        subject = next((h["value"] for h in headers if h["name"] == "Subject"), "(No Subject)")
-        snippet = txt.get("snippet", "")
-        # Small bugfix here to decode HTML characters into human readable.
-        clean_subject = html.unescape(subject)
-        clean_snippet = html.unescape(snippet)
-        label = classify_email(clean_subject, clean_snippet)
-        # End bugfix
+        try:
+            if msg['id'] in seen_ids:
+                continue
+            seen_ids.add(msg['id'])
 
-        # PRINT STATEMENT FOR DEBUGGING, ALSO LOOK IN .log FILE FOR CLEARER OUTPUT
-        log_msg = f"""
-        Subject: {clean_subject}
-        Snippet: {clean_snippet}
-        Predicted Label: {label}
-        ---
-        """
-        print(log_msg)
-        logging.info(log_msg.strip())
-        # END PRINT STATEMENTS AND DEBUG LOGGING
+            txt = service.users().messages().get(userId='me', id=msg['id'], format='full').execute()
+            payload = txt['payload']
+            headers = payload.get("headers", [])
+            subject = next((h["value"] for h in headers if h["name"] == "Subject"), "(No Subject)")
+            snippet = txt.get("snippet", "")
+            sender = next((h["value"] for h in headers if h["name"] == "From"), "")
 
-        apply_label(service, msg['id'], label)
+            clean_subject = html.unescape(subject)
+            clean_snippet = html.unescape(snippet)
+
+            # Extract clean email from "Name <email>"
+            import re
+            match = re.search(r'<(.+?)>', sender)
+            sender_email = match.group(1) if match else sender
+
+            if sender_email in FREQUENT_SENDERS:
+                label = FREQUENT_SENDERS[sender_email]
+                logging.info(f"Skipping classification. Sender: {sender_email} matched frequent sender rule.")
+            else:
+                label = classify_email(clean_subject, clean_snippet)
+                time.sleep(.5)
+
+            log_msg = f"""
+            Subject: {clean_subject}
+            Snippet: {clean_snippet}
+            Predicted Label: {label}
+            ---
+            """
+            print(log_msg)
+            logging.info(log_msg.strip())
+
+            apply_label(service, msg['id'], label)
+
+        except Exception as e:
+            logging.exception("Error processing email")
+
 
 def apply_label(service, msg_id, label_name):
-    labels_res = service.users().labels().list(userId='me').execute()
-    label_id = None
-    for label in labels_res['labels']:
-        if label['name'].lower() == label_name.lower():
-            label_id = label['id']
-            break
-    if not label_id:
-        new_label = service.users().labels().create(userId='me', body={
-            'name': label_name,
-            'labelListVisibility': 'labelShow',
-            'messageListVisibility': 'show'
-        }).execute()
-        label_id = new_label['id']
-    
+    BUILTIN_CATEGORY_LABELS = {
+        "Promotions": "CATEGORY_PROMOTIONS",
+        "Social": "CATEGORY_SOCIAL",
+        "Updates": "CATEGORY_UPDATES",
+        "Forums": "CATEGORY_FORUMS"
+    }
+
+    if label_name in BUILTIN_CATEGORY_LABELS:
+        label_id = BUILTIN_CATEGORY_LABELS[label_name]
+    else:
+        labels_res = service.users().labels().list(userId='me').execute()
+        label_id = None
+        for label in labels_res['labels']:
+            if label['name'].lower() == label_name.lower():
+                label_id = label['id']
+                break
+        if not label_id:
+            new_label = service.users().labels().create(userId='me', body={
+                'name': label_name,
+                'labelListVisibility': 'labelShow',
+                'messageListVisibility': 'show'
+            }).execute()
+            label_id = new_label['id']
+
+    # Apply the label
     service.users().messages().modify(
         userId='me',
         id=msg_id,
@@ -90,6 +128,42 @@ def apply_label(service, msg_id, label_name):
     ).execute()
 
 
+def get_or_create_label(service, label_name):
+    labels = service.users().labels().list(userId='me').execute().get('labels', [])
+    for label in labels:
+        if label['name'].lower() == label_name.lower():
+            return label['id']
+    # Create new label if not found
+    new_label = service.users().labels().create(userId='me', body={
+        'name': label_name,
+        'labelListVisibility': 'labelShow',
+        'messageListVisibility': 'show'
+    }).execute()
+    return new_label['id']
+
+def create_smart_filter(service, sender_email, label_name):
+    # Search for all messages from this sender
+    query = f'from:{sender_email}'
+    messages = service.users().messages().list(userId='me', q=query, maxResults=500).execute().get('messages', [])
+
+    label_id = get_or_create_label(service, label_name)
+
+    for msg in messages:
+        service.users().messages().modify(
+            userId='me',
+            id=msg['id'],
+            body={'addLabelIds': [label_id]}
+        ).execute()
+
+
+
 if __name__ == '__main__':
     service = authenticate_gmail()
+    FREQUENT_SENDERS = {
+        "info@cdga.org": "CDGA",
+        "no-reply@linkedin.com": "LinkedIn",
+        "news@nytimes.com": "New York Times"
+    }
+    for sender_email, label_name in FREQUENT_SENDERS.items():
+        create_smart_filter(service, sender_email, label_name)
     get_emails(service)

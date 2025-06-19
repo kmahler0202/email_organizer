@@ -35,7 +35,7 @@ def classify_email(subject, snippet):
     user_prompt = f"Subject: {subject}\nBody: {snippet}\n\nRespond only with the category name."
 
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-4.1-mini",
         messages=[
             {"role": "system", "content": prompt_system},
             {"role": "user", "content": user_prompt}

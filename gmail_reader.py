@@ -42,7 +42,7 @@ def authenticate_gmail():
 
 
 
-def get_emails(service, max_results=300):
+def get_emails(service, max_results=3000):
     FREQUENT_SENDERS = {
         "info@cdga.org": "CDGA",
         "no-reply@linkedin.com": "LinkedIn",
@@ -84,7 +84,7 @@ def get_emails(service, max_results=300):
             if sender_email in FREQUENT_SENDERS:
                 label = FREQUENT_SENDERS[sender_email]
                 logging.info(f"Skipping classification. Sender: {sender_email} matched frequent sender rule.")
-                create_smart_filter(service, sender_email, label)
+                get_or_create_label(service, label)
             else:
                 label = classify_email(clean_subject, clean_snippet)
                 time.sleep(.5)
@@ -150,22 +150,48 @@ def get_or_create_label(service, label_name):
     }).execute()
     return new_label['id']
 
-def create_smart_filter(service, sender_email, label_name):
-    # Search for all messages from this sender
-    query = f'from:{sender_email}'
-    messages = service.users().messages().list(userId='me', q=query, maxResults=500).execute().get('messages', [])
+# Currently marks all emails as unread. Made specifically for my Gmail.
+# A more appropriate functionality would be a helper to mark an email as read.
+# This feature would be useful for something like an old promotional.
+def mark_all_unread_as_read(service):
+    user_id = 'me'
+    query = 'is:unread'
+    next_page_token = None
+    count = 0
 
-    label_id = get_or_create_label(service, label_name)
-
-    for msg in messages:
-        service.users().messages().modify(
-            userId='me',
-            id=msg['id'],
-            body={'addLabelIds': [label_id]}
+    while True:
+        response = service.users().messages().list(
+            userId=user_id,
+            q=query,
+            pageToken=next_page_token,
+            maxResults=500
         ).execute()
 
+        messages = response.get('messages', [])
+        if not messages:
+            break
+
+        for msg in messages:
+            service.users().messages().modify(
+                userId=user_id,
+                id=msg['id'],
+                body={'removeLabelIds': ['UNREAD']}
+            ).execute()
+            count += 1
+            print(f"Marked message {msg['id']} as read.")
+        
+
+        next_page_token = response.get('nextPageToken')
+        if not next_page_token:
+            break
+
+    print(f"Marked {count} unread messages as read.")
 
 
+
+# For label box sorting functionality uncomment get_emails()
+# For marking all emails as read functionality uncomment mark_all_unread_as_read()
 if __name__ == '__main__':
     service = authenticate_gmail()
-    get_emails(service)
+    # get_emails(service)
+    # mark_all_unread_as_read(service)

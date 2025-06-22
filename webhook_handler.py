@@ -5,10 +5,10 @@ app = Flask(__name__)
 
 @app.route('/gmail_webhook', methods=['POST'])
 def gmail_webhook():
-    print("New Gmail activity notification received.")
+    print("Gmail push notification received.")
     service = authenticate_gmail()
-    get_emails(service)  # Necessary?
-    return '', 204
+    get_emails(service)  # Reuse your existing logic -- FUNCTIONAL
+    return '', 204  # Must return 200/204 to acknowledge success, CHECK GPT'S CORRECTNESS HERE FOR ACK #
 
 if __name__ == '__main__':
     app.run(port=5000)

@@ -188,6 +188,64 @@ def mark_all_unread_as_read(service):
     print(f"Marked {count} unread messages as read.")
 
 
+def process_newest_message(service, start_history_id):
+    try:
+        history_result = service.users().history().list(
+            userId='me',
+            startHistoryId=start_history_id,
+            historyTypes=['messageAdded']
+        ).execute()
+
+        messages = []
+        for record in history_result.get('history', []):
+            messages.extend(record.get('messages', []))
+
+        if not messages:
+            print("No new messages found in history.")
+            return
+
+        # Just process the **most recent one**
+        newest_msg_id = messages[-1]['id']
+
+        # Fetch the message
+        txt = service.users().messages().get(userId='me', id=newest_msg_id, format='full').execute()
+        payload = txt['payload']
+        headers = payload.get("headers", [])
+        subject = next((h["value"] for h in headers if h["name"] == "Subject"), "(No Subject)")
+        snippet = txt.get("snippet", "")
+        sender = next((h["value"] for h in headers if h["name"] == "From"), "")
+
+        import re, html
+        clean_snippet = re.sub(r'[^\x20-\x7E\n\r\t]', '', html.unescape(snippet))
+        clean_subject = re.sub(r'[^\x20-\x7E\n\r\t]', '', html.unescape(subject))
+        sender_email = re.search(r'<(.+?)>', sender)
+        sender_email = sender_email.group(1) if sender_email else sender
+
+        FREQUENT_SENDERS = {
+            "info@cdga.org": "CDGA",
+            "no-reply@linkedin.com": "LinkedIn",
+            "news@nytimes.com": "New York Times",
+            "nytdirect@nytimes.com": "New York Times",
+            "jobalerts-noreply@linkedin.com" : "LinkedIn"
+        }
+
+        if sender_email in FREQUENT_SENDERS:
+            label = FREQUENT_SENDERS[sender_email]
+            get_or_create_label(service, label)
+        else:
+            label = classify_email(clean_subject, clean_snippet)
+            time.sleep(0.5)
+
+        apply_label(service, newest_msg_id, label)
+
+        print(f"Labeled email from {sender_email} as '{label}'")
+
+    except Exception as e:
+        logging.exception("Error in real-time message processor")
+
+
+
+
 
 # For label box sorting functionality uncomment get_emails()
 # For marking all emails as read functionality uncomment mark_all_unread_as_read()
